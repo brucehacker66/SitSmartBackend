@@ -36,6 +36,7 @@ def extract_features(keypoints):
     - features (numpy array): Extracted features, shape (2,).
     """
     # Keypoint indices
+    # print(np.shape(keypoints))
     nose_idx = 0
     left_shoulder_idx = 5
     right_shoulder_idx = 6
@@ -101,18 +102,17 @@ def process_keypoints_array(keypoints_array, label):
             y.append(label)
 
 
-def classify_posture(image_path):
+def classify_posture(images):
     """
     Classify posture based on keypoints.
 
     Args:
-    - image_path (/path/to/frame_i.jpg): path to the webcam image that needs to be classified
+    - images (list): .jpg to be classified
 
     Returns:
     - prediction (int): Predicted class label or None if classification is not possible.
     """
-    images = [Image.open(image_path)]
-    keypoints = postureDetect(images)[0]
+    keypoints = np.array((postureDetect(images))[0])
     
     features = extract_features(keypoints)
     if features is not None:
@@ -124,6 +124,13 @@ def classify_posture(image_path):
 
 # testing
 if __name__ == "__main__":
+    # Load keypoints data
+    results_normal = np.load('results_normal.npy')  # Good posture
+    results_backwards = np.load('results_backwards.npy')  # Bad posture - backwards
+    results_forwards = np.load('results_forwards.npy')  # Bad posture - forwards
+    # results_normal = results_normal[normal_i]
+    # results_backwards= results_backwards[backwards_i]
+    # results_forwards = results_forwards[forward_i]
  
     # Prepare data
     X = []
@@ -156,8 +163,10 @@ if __name__ == "__main__":
 
 
     # DO INFERENCE HERE
-    image_path = '../AI System Data/Normal posture/frames/frame_00000.jpg'  # Example using the first image from normal posture
-    prediction = classify_posture(image_path)
+    image_path = '../AI System Data/Normal posture/frames/frame_00008.jpg'  # Example using the first image from normal posture
+    images = [Image.open(image_path)]
+
+    prediction = classify_posture(images)
     posture_classes = {0: 'Good Posture', 1: 'Bad Posture - Backwards', 2: 'Bad Posture - Forwards'}
     if prediction is not None:
         print(f"Predicted Posture: {posture_classes[prediction]}")
