@@ -125,9 +125,9 @@ def classify_posture(images):
 # testing
 if __name__ == "__main__":
     # Load keypoints data
-    results_normal = np.load('results_normal.npy')  # Good posture
-    results_backwards = np.load('results_backwards.npy')  # Bad posture - backwards
-    results_forwards = np.load('results_forwards.npy')  # Bad posture - forwards
+    results_normal = np.load('./npy_data/results_normal.npy')  # Good posture
+    results_backwards = np.load('./npy_data/results_backwards.npy')  # Bad posture - backwards
+    results_forwards = np.load('./npy_data/results_forwards.npy')  # Bad posture - forwards
     # results_normal = results_normal[normal_i]
     # results_backwards= results_backwards[backwards_i]
     # results_forwards = results_forwards[forward_i]
