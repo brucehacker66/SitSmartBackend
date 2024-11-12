@@ -10,7 +10,7 @@ device = None
 
 def initialize_model():
     global model, device
-    model_path = os.path.join("checkpoints", "yolov8m-pose.pt")
+    model_path = os.path.join("checkpoints", "yolov8s-pose.pt")
     model = YOLO(model_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
