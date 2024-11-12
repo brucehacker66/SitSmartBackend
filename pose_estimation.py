@@ -10,12 +10,12 @@ device = None
 
 def initialize_model():
     global model, device
-    model_path = os.path.join("checkpoints", "yolov8n-pose.pt")
+    model_path = os.path.join("checkpoints", "yolov8m-pose.pt")
     model = YOLO(model_path)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
 
-def inference(images, conf_threshold=0.9):
+def inference(images, conf_threshold=0.5):
     """
     Perform inference on a list of PIL Images and return keypoints for detected humans.
 
