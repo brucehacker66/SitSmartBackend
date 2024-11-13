@@ -83,7 +83,7 @@ def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
         prediction = classify_posture(keypoints, classifier)
 
         count_bad = sum(1 for x in prediction if x == 1 or x == 2)
-        count_good = sum(0 for x in prediction if x == 0)
+        count_good = sum(1 for x in prediction if x == 0)
         num_img = keypoints.shape[0]
         print(num_img)
 
