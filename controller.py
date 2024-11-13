@@ -1,39 +1,40 @@
 from flask import Flask, request, jsonify
-from threading import Thread
+from threading import Thread, Event
 import service
 
 app = Flask(__name__)
 
-# Start the worker thread
-worker_thread = Thread(target=service.process_queue, daemon=True)
-worker_thread.start()
-
-# Endpoint to add image ID to the processing queue
-# image_id should map the id in the database
-@app.route('sitsmart/api/infer', methods=['POST'])
-def infer():
-    data = request.get_json()
-    user_id = data.get('user_id')
-    image_id = data.get('image_id')
-
-    if not user_id or not image_id:
-        return jsonify({"error": "user_id and image_id are required"}), 400
-
-    # Add image ID to the queue using service logic
-    service.add_to_queue(user_id, image_id)
-
-    return jsonify({"message": "Image ID added to processing queue"}), 202
-
 # Endpoint to get the current posture status for a user
-@app.route('sitsmart/api/status/<user_id>', methods=['GET'])
+@app.route('/sitsmart/api/status/<user_id>', methods=['GET'])
 def get_status(user_id):
     status = service.get_posture_status(user_id)
     
     if status == "Processing":
         return jsonify({"status": "Processing"}), 200
     
-    return jsonify(status), 200
+    return jsonify({"status": status}), 200
 
-# the app will run on localhost:5000
+# Endpoint to set the interval for a specific user
+@app.route('/sitsmart/api/interval/<user_id>', methods=['POST'])
+def set_interval(user_id):
+    data = request.get_json()
+    interval = data.get('interval')
+    
+    if not interval or not isinstance(interval, int) or interval <= 0:
+        return jsonify({"error": "Invalid interval provided"}), 400
+    
+    service.set_user_interval(user_id, interval)
+    return jsonify({"message": f"Interval for user {user_id} set to {interval} seconds"}), 200
+
+# Endpoint to add a new user and start their status update thread
+@app.route('/sitsmart/api/add_user/<user_id>', methods=['POST'])
+def add_user(user_id):
+    if service.user_exists(user_id):
+        return jsonify({"error": "User already exists"}), 400
+    
+    service.add_user(user_id)
+    return jsonify({"message": f"User {user_id} added with default interval {service.default_interval} seconds"}), 200
+
+# Run the Flask app on localhost:5000
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

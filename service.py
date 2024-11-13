@@ -1,45 +1,118 @@
-from pose_estimation import initialize_model, inference
 import os
-from PIL import Image
-import fnmatch
 from pathlib import Path
+from PIL import Image
+from threading import Thread, Event
+import time
+import fnmatch
+from pose_estimation import initialize_model, inference
 
-def readImages(num_images, localStoragePath, userId="user123"):
-  images = []
-  naming_scheme = f"sitsmart_{userId}_*.png"
-  # Filter files by userId and naming scheme
-  files = [
-    f for f in os.listdir(localStoragePath)
-    if fnmatch.fnmatch(f, naming_scheme) and f.endswith('png')
-  ]
-  files = sorted(
-      [os.path.join(localStoragePath, f) for f in files],
-      key=os.path.getmtime,
-      reverse=True
-  )[:num_images]  # only take the most recent `num_images` files
+# Get the default Downloads folder, regardless of the OS
+def get_default_download_folder():
+    return str(Path.home() / "Downloads")
 
-  for file_path in files:
-      try:
-          img = Image.open(file_path)
-          images.append(img)
-      except Exception as e:
-        print(f"Error opening image {file_path}: {e}")
+user_status = {}          # Maps user_id to their current status
+user_intervals = {}       # Maps user_id to their update interval
+default_interval = 45     # Default interval in seconds
+threads = {}              # Maps user_id to their respective thread
+stop_events = {}          # Maps user_id to an Event to stop the thread if needed
 
-  return images
+# Initialize model for inference
+initialize_model()
 
+def read_images(num_images, userId="user123"):
+    images = []
+    localStoragePath = get_default_download_folder()  # Use default Downloads folder
+    naming_scheme = f"sitsmart_{userId}_*.png"
+    # Filter files by userId and naming scheme
+    files = [
+        f for f in os.listdir(localStoragePath)
+        if fnmatch.fnmatch(f, naming_scheme) and f.endswith('png')
+    ]
+    files = sorted(
+        [os.path.join(localStoragePath, f) for f in files],
+        key=os.path.getmtime,
+        reverse=True
+    )[:num_images]  # Only take the most recent `num_images` files
 
+    for file_path in files:
+        try:
+            img = Image.open(file_path)
+            images.append(img)
+        except Exception as e:
+            print(f"Error opening image {file_path}: {e}")
 
-def postureDetect(interval=60):
-  """
-    Posture detection pipeline. This function reads images from the local storage, performs inference on them, and sends the results to the server.
+    return images
 
-    Args:
-    - interval (int): Interval in seconds to read images from the local storage.
-
+def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
     """
-  initialize_model()
-  results = inference(images)
-  return results
+    Main Posture detection pipeline for a specific user.
+    This function reads images, performs inference, and updates user status.
+    """
+    images = read_images(num_images=detection_interval // capture_interval, userId=user_id)
+    
+    if images:
+
+        # perform yolo inference 
+        keypoints = inference(images)
+
+        # classifier
+        
+        if result:
+            # Example logic to update status based on results
+            user_status[user_id] = "Good" if results[0]['confidence'] > 0.8 else "Bad"
+        else:
+            user_status[user_id] = "Unknown"
+    else:
+        user_status[user_id] = "Unknown"
+
+def update_status_periodically(user_id):
+    """
+    Periodically update the posture status of a user.
+    """
+    while not stop_events[user_id].is_set():
+        interval = user_intervals.get(user_id, default_interval)
+        posture_detect(user_id, detection_interval=interval)
+        time.sleep(interval)
+
+def add_user(user_id = "user123"):
+    """
+    Add a new user and start their status update thread.
+    """
+    if user_id in user_status:
+        raise ValueError("User already exists")
+
+    # Initialize user status and interval
+    user_status[user_id] = "Unknown"
+    user_intervals[user_id] = default_interval
+
+    # Create an event to stop the thread if needed
+    stop_events[user_id] = Event()
+
+    # Start a new thread for the user
+    thread = Thread(target=update_status_periodically, args=(user_id,), daemon=True)
+    threads[user_id] = thread
+    thread.start()
+
+def set_user_interval(user_id, interval):
+    """
+    Set the update interval for a specific user.
+    """
+    if user_id not in user_intervals:
+        raise ValueError("User does not exist")
+
+    user_intervals[user_id] = interval
+
+def get_posture_status(user_id):
+    """
+    Get the current posture status of a user.
+    """
+    return user_status.get(user_id, "Processing")
+
+def user_exists(user_id):
+    """
+    Check if a user exists.
+    """
+    return user_id in user_status
 
 
 # testing
@@ -50,7 +123,7 @@ if __name__ == "__main__":
     # image_files = [f for f in os.listdir(data_path) if os.path.isfile(os.path.join(data_path, f))]
     # images = [Image.open(os.path.join(data_path, image_file)) for image_file in image_files]
 
-    downloads_path = Path.home() / "Downloads"
+    downloads_path = Path(os.path.expanduser("~/Downloads"))
     if not downloads_path.exists():
         print("Downloads folder not found.")
     
