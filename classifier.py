@@ -6,6 +6,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 from sklearn.ensemble import GradientBoostingClassifier
+import joblib
+
 
 
 def readImages(interval, localStoragePath, userId):
@@ -160,18 +162,19 @@ if __name__ == "__main__":
     y_pred = classifier.predict(X_test)
     print(classification_report(y_test, y_pred))
 
+    joblib.dump(classifier, 'gradient_boosting_model.joblib')
 
 
-    # DO INFERENCE HERE
-    image_path = '../AI System Data/Normal posture/frames/frame_00008.jpg'  # Example using the first image from normal posture
-    images = [Image.open(image_path)]
+    # # DO INFERENCE HERE
+    # image_path = '../AI System Data/Normal posture/frames/frame_00008.jpg'  # Example using the first image from normal posture
+    # images = [Image.open(image_path)]
 
-    prediction = classify_posture(images)
-    posture_classes = {0: 'Good Posture', 1: 'Bad Posture - Backwards', 2: 'Bad Posture - Forwards'}
-    if prediction is not None:
-        print(f"Predicted Posture: {posture_classes[prediction]}")
-    else:
-        print("Could not classify posture due to missing keypoints.")
+    # prediction = classify_posture(images)
+    # posture_classes = {0: 'Good Posture', 1: 'Bad Posture - Backwards', 2: 'Bad Posture - Forwards'}
+    # if prediction is not None:
+    #     print(f"Predicted Posture: {posture_classes[prediction]}")
+    # else:
+    #     print("Could not classify posture due to missing keypoints.")
 
     # import matplotlib.pyplot as plt
 

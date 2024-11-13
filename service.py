@@ -5,6 +5,9 @@ from threading import Thread, Event
 import time
 import fnmatch
 from pose_estimation import initialize_model, inference
+import joblib
+from classifier import extract_features
+import numpy as np
 
 # Get the default Downloads folder, regardless of the OS
 def get_default_download_folder():
@@ -43,27 +46,61 @@ def read_images(num_images, userId="user123"):
 
     return images
 
+def classify_posture(keypoints, classifier):
+    """
+    Classify posture based on keypoints.
+
+    Args:
+    - keypoints (list): list of (n,17,2) keypoints from yolo, where n is the number of images
+
+    Returns:
+    - prediction (list): list of predicted class label, each element corresponds to the class of the image at that index; nan if can't be classified.
+    """
+    prediction = []
+    for i in np.arange(len(keypoints)):
+        features = extract_features(keypoints[i])
+        if features is not None:
+            prediction.append(classifier.predict([features])[0])
+            # return prediction
+        else:
+            prediction.append(np.nan)
+    return prediction
+
+
 def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
     """
     Main Posture detection pipeline for a specific user.
     This function reads images, performs inference, and updates user status.
     """
     images = read_images(num_images=detection_interval // capture_interval, userId=user_id)
+    classifier = joblib.load('./model_checkpoint/gradient_boosting_model.joblib')
+
     
     if images:
-
         # perform yolo inference 
         keypoints = inference(images)
+        # perform classification
+        prediction = classify_posture(keypoints, classifier)
 
-        # classifier
-        
-        if result:
-            # Example logic to update status based on results
-            user_status[user_id] = "Good" if results[0]['confidence'] > 0.8 else "Bad"
+        count_bad = sum(1 for x in prediction if x == 1 or x == 2)
+        count_good = sum(0 for x in prediction if x == 0)
+        num_img = detection_interval // capture_interval
+
+        # Logic to update status based on prediction results
+        if count_good >=  num_img//2 + 1:
+            user_status[user_id] = "Good"
+        elif count_bad >= 0.7 * num_img:
+            user_status[user_id] = "Bad"
         else:
             user_status[user_id] = "Unknown"
-    else:
-        user_status[user_id] = "Unknown"
+        
+    #     if result:
+    #         # Example logic to update status based on results
+    #         user_status[user_id] = "Good" if results[0]['confidence'] > 0.8 else "Bad"
+    #     else:
+    #         user_status[user_id] = "Unknown"
+    # else:
+    #     user_status[user_id] = "Unknown"
 
 def update_status_periodically(user_id):
     """
