@@ -57,7 +57,6 @@ def classify_posture(keypoints, classifier):
     - prediction (list): list of predicted class label, each element corresponds to the class of the image at that index; nan if can't be classified.
     """
     prediction = []
-    print(keypoints)
     for i in np.arange(len(keypoints)):
         features = extract_features(keypoints[i])
         if features is not None:
@@ -85,8 +84,11 @@ def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
 
         count_bad = sum(1 for x in prediction if x == 1 or x == 2)
         count_good = sum(0 for x in prediction if x == 0)
-        num_img = detection_interval // capture_interval
+        num_img = keypoints.shape[0]
+        print(num_img)
 
+        print(count_bad)
+        print(count_good)
         # Logic to update status based on prediction results
         if count_good >=  num_img//2 + 1:
             user_status[user_id] = "Good"
@@ -94,6 +96,8 @@ def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
             user_status[user_id] = "Bad"
         else:
             user_status[user_id] = "Unknown"
+    else:
+        user_status[user_id] = "None"
 
 def update_status_periodically(user_id):
     """
