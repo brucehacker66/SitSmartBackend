@@ -79,7 +79,7 @@ def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
     
     if images:
         # perform yolo inference 
-        keypoints = inference(images)
+        keypoints = np.array(inference(images))
         # perform classification
         prediction = classify_posture(keypoints, classifier)
 
