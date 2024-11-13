@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
 from threading import Thread, Event
 import service
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 # Endpoint to get the current posture status for a user
 @app.route('/sitsmart/api/status/<user_id>', methods=['GET'])
