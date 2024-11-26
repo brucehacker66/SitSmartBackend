@@ -148,6 +148,20 @@ def user_exists(user_id):
     """
     return user_id in user_status
 
+def delete_user(user_id):
+    """
+    Delete a user and stop their status update thread.
+    """
+    if user_id not in user_status:
+        raise ValueError("User does not exist")
+
+    stop_events[user_id].set()
+    threads[user_id].join()
+    del user_status[user_id]
+    del user_intervals[user_id]
+    del threads[user_id]
+    del stop_events[user_id]
+
 
 # testing
 if __name__ == "__main__":

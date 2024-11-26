@@ -37,6 +37,15 @@ def add_user(user_id):
     service.add_user(user_id)
     return jsonify({"message": f"User {user_id} added with default interval {service.default_interval} seconds"}), 200
 
+# Endpoint to delete a user and stop their status update thread
+@app.route('/sitsmart/api/delete_user/<user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    if not service.user_exists(user_id):
+        return jsonify({"error": "User does not exist"}), 400
+    
+    service.delete_user(user_id)
+    return jsonify({"message": f"User {user_id} deleted"}), 200
+
 # Run the Flask app on localhost:5000
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
