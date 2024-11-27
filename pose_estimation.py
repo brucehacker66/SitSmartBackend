@@ -1,19 +1,21 @@
-from ultralytics import YOLO
 import os
 import torch
 from PIL import Image
+import cv2
+import mediapipe as mp
 import numpy as np
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+mp_pose = mp.solutions.pose
+
 
 # Initialize model and device
 model = None
-device = None
 
 def initialize_model():
-    global model, device
-    model_path = os.path.join("checkpoints", "yolov8s-pose.pt")
-    model = YOLO(model_path)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
+    global model
+    model =  mp_pose.Pose(
+    static_image_mode=True, min_detection_confidence=0.5, model_complexity=2)
 
 def inference(images, conf_threshold=0.5):
     """
