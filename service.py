@@ -18,13 +18,14 @@ user_intervals = {}       # Maps user_id to their update interval
 default_interval = 45     # Default interval in seconds
 threads = {}              # Maps user_id to their respective thread
 stop_events = {}          # Maps user_id to an Event to stop the thread if needed
+user_directories = {}  # Maps user_id to their selected directory
 
 # Initialize model for inference
 initialize_model()
 
 def read_images(num_images, userId="user123"):
     images = []
-    localStoragePath = get_default_download_folder()  # Use default Downloads folder
+    localStoragePath = user_directories.get(userId, get_default_download_folder())
     naming_scheme = f"sitsmart_{userId}_*.png"
     # Filter files by userId and naming scheme
     files = [
@@ -162,6 +163,9 @@ def delete_user(user_id):
     del threads[user_id]
     del stop_events[user_id]
 
+def update_user_directory(user_id, directory_path):
+    user_directories[user_id] = directory_path
+    return f"Directory for user {user_id} updated to {directory_path}"
 
 # testing
 if __name__ == "__main__":
