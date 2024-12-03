@@ -49,22 +49,28 @@ def inference(images, conf_threshold=0.5):
     results_list = []
 
     for image in images:
-        # Convert PIL Image to the format YOLO expects (numpy array)
+        # Convert PIL Image to numpy array and prepare for MediaPipe
         image_np = np.array(image)
+        image_rgb = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)  # Convert to RGB
 
-        # Run inference on the image
-        results = model(source=image_np, conf=conf_threshold, show=False, device=device)
-        # Extract keypoints from results if human detected
-        for result in results:
-            if hasattr(result, "names"):
-                if result.names[0] == "person":
-                    if hasattr(result, "boxes"):
-                        if hasattr(result, "keypoints"):
-                            keypoints = result.keypoints.xy.cpu().tolist()  # Get keypoints as a list
-                            classes = result.boxes.cls.cpu().numpy()
-                            for cls_idx, kp in zip(classes, keypoints):
-                                if cls_idx == 0:
-                                    results_list.append(kp)
+        # Run inference using MediaPipe Pose
+        with mp_pose.Pose(
+            static_image_mode=True, min_detection_confidence=conf_threshold, model_complexity=2
+        ) as pose:
+            results = pose.process(image_rgb)
+
+            # Extract keypoints if detections are found
+            if results.pose_landmarks:
+                keypoints = []
+                for landmark in results.pose_landmarks.landmark:
+                    x = landmark.x * image_np.shape[1] if landmark.visibility > conf_threshold else 0
+                    y = landmark.y * image_np.shape[0] if landmark.visibility > conf_threshold else 0
+                    keypoints.append([x, y])
+
+                results_list.append(keypoints)
+            else:
+                # Append an empty list if no keypoints are detected
+                results_list.append([])
 
     return results_list
 
