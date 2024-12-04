@@ -23,7 +23,7 @@ def inference(images, conf_threshold=0.5):
 
     Args:
     - images (list): List of PIL Image objects.
-    - conf_threshold (float): Confidence threshold for YOLO.
+    - conf_threshold (float): Confidence threshold for Mediapipe.
 
     Returns:
     - results_list (list of list): List containing keypoints for detected humans in each image. Keypoint is in a list [x, y].
