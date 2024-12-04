@@ -46,21 +46,6 @@ def delete_user(user_id):
     service.delete_user(user_id)
     return jsonify({"message": f"User {user_id} deleted"}), 200
 
-# Endpoint to update the directory for a user
-@app.route('/sitsmart/api/update_directory/<user_id>', methods=['POST'])
-def update_directory(user_id):
-    if not service.user_exists(user_id):
-        return jsonify({"error": "User does not exist"}), 400
-    
-    data = request.get_json()
-    directory_path = data.get("directoryPath")
-    
-    if not directory_path:
-        return jsonify({"error": "Directory path is required"}), 400
-
-    message = service.update_user_directory(user_id, directory_path)
-    return jsonify({"message": message}), 200
-
 # Run the Flask app on localhost:5000
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
