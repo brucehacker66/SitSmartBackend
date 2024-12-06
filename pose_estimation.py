@@ -9,68 +9,48 @@ mp_drawing_styles = mp.solutions.drawing_styles
 mp_pose = mp.solutions.pose
 
 
-# Initialize model and device
+# Initialize the MediaPipe Pose model globally
 model = None
 
 def initialize_model():
     global model
-    model =  mp_pose.Pose(
-    static_image_mode=True, min_detection_confidence=0.5, model_complexity=2)
+    model = mp.solutions.pose.Pose(
+        static_image_mode=True, min_detection_confidence=0.5, model_complexity=2
+    )
 
-def inference(images, conf_threshold=0.5):
+
+def inference(images):
     """
-    Perform inference on a list of PIL Images and return keypoints for detected humans.
+    Perform inference on a batch of images using MediaPipe Pose to detect keypoints.
 
     Args:
-    - images (list): List of PIL Image objects.
-    - conf_threshold (float): Confidence threshold for Mediapipe.
+        images (list): List of PIL.Image images.
 
     Returns:
-    - results_list (list of list): List containing keypoints for detected humans in each image. Keypoint is in a list [x, y].
-    - keypoint of [0, 0] means the keypoint is not detected, like elbow, wrist, etc. They are still appended to the result because their prescence can be signal for bad posture.
-        Nose
-        Left Eye
-        Right Eye
-        Left Ear
-        Right Ear
-        Left Shoulder
-        Right Shoulder
-        Left Elbow
-        Right Elbow
-        Left Wrist
-        Right Wrist
-        Left Hip
-        Right Hip
-        Left Knee
-        Right Knee
-        Left Ankle
-        Right Ankle
+        list: A list of keypoints for each image. Each element is a list of tuples (x, y, z, visibility).
+              The order of keypoints matches the order of the input image list.
     """
-    results_list = []
+    global model
+    keypoints_list = []  # To store the keypoints for each image in the same order.
 
-    for image in images:
-        # Convert PIL Image to numpy array and prepare for MediaPipe
+    for idx, image in enumerate(images):
+        # Convert PIL.Image to numpy array and then to RGB for MediaPipe processing.
         image_np = np.array(image)
-        image_rgb = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)  # Convert to RGB
+        image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
 
-        # Run inference using MediaPipe Pose
-        with mp_pose.Pose(
-            static_image_mode=True, min_detection_confidence=conf_threshold, model_complexity=2
-        ) as pose:
-            results = pose.process(image_rgb)
+        # Process the image with MediaPipe Pose.
+        results = model.process(image_rgb)
 
-            # Extract keypoints if detections are found
-            if results.pose_landmarks:
-                keypoints = []
-                for landmark in results.pose_landmarks.landmark:
-                    x = landmark.x * image_np.shape[1] if landmark.visibility > conf_threshold else 0
-                    y = landmark.y * image_np.shape[0] if landmark.visibility > conf_threshold else 0
-                    keypoints.append([x, y])
+        if results.pose_landmarks:
+            # Extract keypoints as (x, y, z, visibility).
+            keypoints = [
+                (landmark.x, landmark.y, landmark.z, landmark.visibility)
+                for landmark in results.pose_landmarks.landmark
+            ]
+        else:
+            keypoints = []  # Empty list if no landmarks are detected.
 
-                results_list.append(keypoints)
-            else:
-                # Append an empty list if no keypoints are detected
-                results_list.append([])
+        # Append keypoints to maintain order with images.
+        keypoints_list.append(keypoints)
 
-    return results_list
-
+    return keypoints_list
