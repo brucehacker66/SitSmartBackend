@@ -11,7 +11,7 @@ import numpy as np
 
 # Get the default Downloads folder, regardless of the OS
 def get_default_download_folder():
-    return str(Path.home() / "Downloads")
+    return str(Path.home() / "Pictures")
 
 user_status = {}          # Maps user_id to their current status
 user_intervals = {}       # Maps user_id to their update interval
