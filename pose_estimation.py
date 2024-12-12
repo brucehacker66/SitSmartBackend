@@ -42,7 +42,7 @@ def inference(images):
         results = model.process(image_rgb)
 
         if results.pose_landmarks:
-            # Extract keypoints as (x, y, z, visibility).
+            # Extract keypoints as (x, y, z, visibility)
             keypoints = [
                 (landmark.x, landmark.y, landmark.z, landmark.visibility)
                 for landmark in results.pose_landmarks.landmark
