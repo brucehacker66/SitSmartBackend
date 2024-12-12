@@ -50,7 +50,7 @@ def inference(images):
         else:
             keypoints = []  # Empty list if no landmarks are detected.
 
-        # Append keypoints to maintain order with images.
+        # Append keypoints to maintain order with images
         keypoints_list.append(keypoints)
 
     return keypoints_list
