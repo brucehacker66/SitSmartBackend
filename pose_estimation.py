@@ -9,17 +9,15 @@ mp_drawing_styles = mp.solutions.drawing_styles
 mp_pose = mp.solutions.pose
 
 
-# Initialize the MediaPipe Pose model globally
+# Initialize model and device
 model = None
 
 def initialize_model():
     global model
-    model = mp.solutions.pose.Pose(
-        static_image_mode=True, min_detection_confidence=0.5, model_complexity=2
-    )
+    model =  mp_pose.Pose(
+    static_image_mode=True, min_detection_confidence=0.5, model_complexity=2)
 
-
-def inference(images):
+def inference(images, conf_threshold = 0.5):
     """
     Perform inference on a batch of images using MediaPipe Pose to detect keypoints.
 
@@ -40,17 +38,18 @@ def inference(images):
 
         # Process the image with MediaPipe Pose.
         results = model.process(image_rgb)
-
+        
         if results.pose_landmarks:
-            # Extract keypoints as (x, y, z, visibility)
-            keypoints = [
-                (landmark.x, landmark.y, landmark.z, landmark.visibility)
-                for landmark in results.pose_landmarks.landmark
-            ]
+            keypoints = []
+            for landmark in results.pose_landmarks.landmark:
+                x = landmark.x if landmark.visibility > conf_threshold else np.nan
+                y = landmark.y if landmark.visibility > conf_threshold else np.nan
+                z = landmark.z if landmark.visibility > conf_threshold else np.nan
+                keypoints.append([x, y,z])
+            keypoints_list.append(keypoints)
         else:
-            keypoints = []  # Empty list if no landmarks are detected.
-
-        #Append keypoints to maintain order with images
-        keypoints_list.append(keypoints)
+            # Append an empty list if no keypoints are detected
+            keypoints_list.append(np.full((33, 3), np.nan))
+        print(f"Image {idx}: Keypoints - {keypoints_list}")
 
     return keypoints_list
