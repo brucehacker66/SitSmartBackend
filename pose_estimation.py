@@ -39,9 +39,9 @@ def inference(images, conf_threshold = 0.5):
         # Process the image with MediaPipe Pose.
         results = model.process(image_rgb)
         
-        if results.pose_world_landmarks:
+        if results.pose_landmarks:
             keypoints = []
-            for landmark in results.pose_world_landmarks.landmark:
+            for landmark in results.pose_landmarks.landmark:
                 x = landmark.x if landmark.visibility > conf_threshold else np.nan
                 y = landmark.y if landmark.visibility > conf_threshold else np.nan
                 z = landmark.z if landmark.visibility > conf_threshold else np.nan
