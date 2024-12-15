@@ -8,6 +8,7 @@ from pose_estimation import initialize_model, inference
 import joblib
 from classifier import extract_features
 import numpy as np
+import pickle
 
 # Get the default Downloads folder, regardless of the OS
 def get_default_download_folder():
@@ -57,10 +58,13 @@ def classify_posture(keypoints, classifier):
     - prediction (list): list of predicted class label, each element corresponds to the class of the image at that index; nan if can't be classified.
     """
     prediction = []
+    with open('./model_checkpoint/scaler.pkl', 'rb') as file:
+        loaded_scaler = pickle.load(file)
     for i in np.arange(len(keypoints)):
         features = extract_features(keypoints[i])
-        if features is not None:
-            prediction.append(classifier.predict([features])[0])
+        features_scaled  = loaded_scaler.transform(features.reshape(1, -1))
+        if not np.isnan(features[0]):
+            prediction.append(classifier.predict(features_scaled)[0])
             # return prediction
         else:
             prediction.append(np.nan)
@@ -73,15 +77,13 @@ def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
     This function reads images, performs inference, and updates user status.
     """
     images = read_images(num_images=detection_interval // capture_interval, userId=user_id)
-    classifier = joblib.load('./model_checkpoint/gradient_boosting_model.joblib')
-
+    classifier = joblib.load('./model_checkpoint/svm_latest.joblib')
     
     if images:
         # perform yolo inference 
         keypoints = np.array(inference(images))
         # perform classification
         prediction = classify_posture(keypoints, classifier)
-
         count_bad = sum(1 for x in prediction if x == 1 or x == 2)
         count_good = sum(1 for x in prediction if x == 0)
         num_img = keypoints.shape[0]
@@ -98,6 +100,7 @@ def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
             user_status[user_id] = "Unknown"
     else:
         user_status[user_id] = "None"
+
 
 def update_status_periodically(user_id):
     """
