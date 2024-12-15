@@ -84,18 +84,21 @@ def posture_detect(user_id, capture_interval = 5, detection_interval = 45):
         keypoints = np.array(inference(images))
         # perform classification
         prediction = classify_posture(keypoints, classifier)
-        count_bad = sum(1 for x in prediction if x == 1 or x == 2)
+        count_bad_backward = sum(1 for x in prediction if x == 1)
+        count_bad_forward = sum(1 for x in prediction if x == 2)
         count_good = sum(1 for x in prediction if x == 0)
         num_img = keypoints.shape[0]
         print(num_img)
-
-        print(count_bad)
+        print(count_bad_backward)
+        print(count_bad_forward)
         print(count_good)
         # Logic to update status based on prediction results
         if count_good >=  num_img//2 + 1:
-            user_status[user_id] = "Good"
-        elif count_bad >= 0.5 * num_img:
-            user_status[user_id] = "Bad"
+            user_status[user_id] = "normal"
+        elif count_bad_backward >= 0.5 * num_img:
+            user_status[user_id] = "lean_backward"
+        elif count_bad_forward >= 0.5 * num_img:
+            user_status[user_id] = "lean_forward"
         else:
             user_status[user_id] = "Unknown"
     else:
