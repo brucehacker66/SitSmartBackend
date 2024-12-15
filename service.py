@@ -52,7 +52,7 @@ def classify_posture(keypoints, classifier):
     Classify posture based on keypoints.
 
     Args:
-    - keypoints (list): list of (n,17,2) keypoints from yolo, where n is the number of images
+    - keypoints (list): list of (n,34,2) keypoints from mediapipe pose, where n is the number of images
 
     Returns:
     - prediction (list): list of predicted class label, each element corresponds to the class of the image at that index; nan if can't be classified.
