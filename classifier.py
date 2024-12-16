@@ -79,7 +79,7 @@ def extract_features(keypoints):
     mid_shoulder = (left_shoulder + right_shoulder) / 2.0
     z_offset = nose[2] - mid_shoulder[2]  # forward/back offset
 
-    # 5. **NEW** vertical offset (assuming y is vertical)
+    # 5. Nose angle
 
     # Existing distance calculation
     nose_distance = np.linalg.norm(nose - mid_shoulder)
