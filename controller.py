@@ -28,6 +28,15 @@ def set_interval(user_id):
     service.set_user_interval(user_id, interval)
     return jsonify({"message": f"Interval for user {user_id} set to {interval} seconds"}), 200
 
+@app.route('/sitsmart/api/interval/<user_id>', methods=['GET'])
+def get_interval(user_id):
+    interval = service.get_user_interval(user_id)
+    
+    if interval is None:
+        return jsonify({"error": "User not found"}), 400
+    
+    return jsonify({"interval": interval}), 200
+
 # Endpoint to add a new user and start their status update thread
 @app.route('/sitsmart/api/add_user/<user_id>', methods=['POST'])
 def add_user(user_id):
@@ -45,6 +54,24 @@ def delete_user(user_id):
     
     service.delete_user(user_id)
     return jsonify({"message": f"User {user_id} deleted"}), 200
+
+@app.route('/sitsmart/api/icon_visibility/<user_id>', methods=['POST'])
+def set_icon_visibility(user_id):
+    data = request.get_json()
+    visibility = data.get('visibility')
+    
+    if visibility not in ["on", "off"]:
+        return jsonify({"error": "Visibility must be 'on' or 'off'"}), 400
+
+    service.set_icon_visibility(user_id, visibility)
+    return jsonify({"message": f"Icon visibility for user {user_id} set to {visibility}"}), 200
+
+# New Endpoint: Get the icon visibility for a user
+@app.route('/sitsmart/api/icon_visibility/<user_id>', methods=['GET'])
+def get_icon_visibility(user_id):
+    visibility = service.get_icon_visibility(user_id)
+    return jsonify({"icon_visibility": visibility}), 200
+
 
 # Run the Flask app on localhost:5000
 if __name__ == '__main__':

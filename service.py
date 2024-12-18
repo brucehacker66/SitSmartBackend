@@ -19,6 +19,7 @@ user_intervals = {}       # Maps user_id to their update interval
 default_interval = 45     # Default interval in seconds
 threads = {}              # Maps user_id to their respective thread
 stop_events = {}          # Maps user_id to an Event to stop the thread if needed
+user_icon_visibility = {}
 
 # Initialize model for inference
 initialize_model()
@@ -142,6 +143,19 @@ def set_user_interval(user_id, interval):
 
     user_intervals[user_id] = interval
 
+def get_user_interval(user_id):
+    """
+    Get the update interval for a specific user.
+
+    Args:
+        user_id (str): The user ID for which to fetch the interval.
+
+    Returns:
+        int: The current interval for the user, or None if the user does not exist.
+    """
+    return user_intervals.get(user_id)
+
+
 def get_posture_status(user_id):
     """
     Get the current posture status of a user.
@@ -167,6 +181,16 @@ def delete_user(user_id):
     del user_intervals[user_id]
     del threads[user_id]
     del stop_events[user_id]
+
+def set_icon_visibility(user_id, visibility):
+    if visibility not in ["on", "off"]:
+        raise ValueError("Visibility must be 'on' or 'off'.")
+
+    user_icon_visibility[user_id] = visibility
+    print(f"Icon visibility for {user_id} set to {visibility}.")
+
+def get_icon_visibility(user_id):
+    return user_icon_visibility.get(user_id, "unknown")
 
 
 # testing
