@@ -1,3 +1,5 @@
 /checkpoints/yolov8n-pose.pt
 /checkpoints
 /results
+__pycache__
+/notebook
