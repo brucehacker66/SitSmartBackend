@@ -1,68 +1,88 @@
-from ultralytics import YOLO
 import os
 import torch
 from PIL import Image
+import cv2
+import mediapipe as mp
 import numpy as np
+mp_drawing = mp.solutions.drawing_utils
+mp_drawing_styles = mp.solutions.drawing_styles
+mp_pose = mp.solutions.pose
+
 
 # Initialize model and device
 model = None
-device = None
 
 def initialize_model():
-    global model, device
-    model_path = os.path.join("checkpoints", "yolov8m-pose.pt")
-    model = YOLO(model_path)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model.to(device)
+    global model
+    model =  mp_pose.Pose(
+    static_image_mode=True, min_detection_confidence=0.5, model_complexity=2)
 
-def inference(images, conf_threshold=0.5):
+def inference(images, conf_threshold = 0.5):
     """
-    Perform inference on a list of PIL Images and return keypoints for detected humans.
+    Perform inference on a batch of images using MediaPipe Pose to detect keypoints.
 
     Args:
-    - images (list): List of PIL Image objects.
-    - conf_threshold (float): Confidence threshold for YOLO.
+        images (list): List of PIL.Image images.
 
     Returns:
-    - results_list (list of list): List containing keypoints for detected humans in each image. Keypoint is in a list [x, y].
-    - keypoint of [0, 0] means the keypoint is not detected, like elbow, wrist, etc. They are still appended to the result because their prescence can be signal for bad posture.
-        Nose
-        Left Eye
-        Right Eye
-        Left Ear
-        Right Ear
-        Left Shoulder
-        Right Shoulder
-        Left Elbow
-        Right Elbow
-        Left Wrist
-        Right Wrist
-        Left Hip
-        Right Hip
-        Left Knee
-        Right Knee
-        Left Ankle
-        Right Ankle
+        list: A list of keypoints for each image. Each element is a list of tuples (x, y, z).
+              The order of keypoints matches the order of the input image list.
+        0 - nose
+        1 - left eye (inner)
+        2 - left eye
+        3 - left eye (outer)
+        4 - right eye (inner)
+        5 - right eye
+        6 - right eye (outer)
+        7 - left ear
+        8 - right ear
+        9 - mouth (left)
+        10 - mouth (right)
+        11 - left shoulder
+        12 - right shoulder
+        13 - left elbow
+        14 - right elbow
+        15 - left wrist
+        16 - right wrist
+        17 - left pinky
+        18 - right pinky
+        19 - left index
+        20 - right index
+        21 - left thumb
+        22 - right thumb
+        23 - left hip
+        24 - right hip
+        25 - left knee
+        26 - right knee
+        27 - left ankle
+        28 - right ankle
+        29 - left heel
+        30 - right heel
+        31 - left foot index
+        32 - right foot index
     """
-    results_list = []
+    global model
+    keypoints_list = []  # To store the keypoints for each image in the same order.
 
-    for image in images:
-        # Convert PIL Image to the format YOLO expects (numpy array)
+    for idx, image in enumerate(images):
+        # Convert PIL.Image to numpy array and then to RGB for MediaPipe processing.
         image_np = np.array(image)
+        image_rgb = cv2.cvtColor(image_np, cv2.COLOR_BGR2RGB)
 
-        # Run inference on the image
-        results = model(source=image_np, conf=conf_threshold, show=False, device=device)
-        # Extract keypoints from results if human detected
-        for result in results:
-            if hasattr(result, "names"):
-                if result.names[0] == "person":
-                    if hasattr(result, "boxes"):
-                        if hasattr(result, "keypoints"):
-                            keypoints = result.keypoints.xy.cpu().tolist()  # Get keypoints as a list
-                            classes = result.boxes.cls.cpu().numpy()
-                            for cls_idx, kp in zip(classes, keypoints):
-                                if cls_idx == 0:
-                                    results_list.append(kp)
+        # Process the image with MediaPipe Pose.
+        results = model.process(image_rgb)
+        
+        if results.pose_landmarks:
+            keypoints = []
+            for landmark in results.pose_landmarks.landmark:
+                x = landmark.x if landmark.visibility > conf_threshold else np.nan
+                y = landmark.y if landmark.visibility > conf_threshold else np.nan
+                z = landmark.z if landmark.visibility > conf_threshold else np.nan
+                keypoints.append([x, y,z])
+            keypoints_list.append(keypoints)
+        else:
+            # Append an empty list if no keypoints are detected
+            keypoints_list.append(np.full((33, 3), np.nan))
+        print(f"Image {idx}: Keypoints - {keypoints_list}")
 
-    return results_list
-
+    return keypoints_list

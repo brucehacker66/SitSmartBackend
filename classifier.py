@@ -4,8 +4,12 @@ from PIL import Image
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+from sklearn.metrics import classification_report, confusion_matrix
+import joblib
+import pickle
 
 
 def readImages(interval, localStoragePath, userId):
@@ -19,87 +23,225 @@ def postureDetect(interval=60):
     - interval (int): Interval in seconds to read images from the local storage.
 
     """
-  initialize_model()
+#   initialize_model()
   results = inference(images)
   return results
 
 
-
+# class PostureFeatureExtractor:
 def extract_features(keypoints):
     """
-    Extract invariant features from keypoints.
+    Extract features from 3D keypoints, adding a vertical nose offset feature
+    to help distinguish backward vs. normal posture.
 
     Args:
-    - keypoints (numpy array): Array of keypoints for a single image/frame, shape (17, 2).
+        keypoints (np.array): shape (17, 3), each row is (x, y, z)
 
     Returns:
-    - features (numpy array): Extracted features, shape (2,).
+        np.array: Extracted features (including vertical_nose_offset)
     """
-    # Keypoint indices
-    # print(np.shape(keypoints))
-    nose_idx = 0
-    left_shoulder_idx = 5
-    right_shoulder_idx = 6
+    # Indices (assuming COCO-style or similar)
+    nose = keypoints[0]            # (x, y, z)
+    left_shoulder = keypoints[11]  # (x, y, z)
+    right_shoulder = keypoints[12] # (x, y, z)
+    if np.isnan(nose).any():
+        return np.full((8,), np.nan)
 
-    # Extract keypoints
-    nose = keypoints[nose_idx]  # Shape (2,)
-    left_shoulder = keypoints[left_shoulder_idx]
-    right_shoulder = keypoints[right_shoulder_idx]
+    # 1. Shoulder line & length
+    shoulder_vector = right_shoulder - left_shoulder
+    shoulder_length = np.linalg.norm(shoulder_vector)
 
-    # Check for missing keypoints (coordinates [0, 0] or invalid values)
-    if np.all(nose == 0) or np.all(left_shoulder == 0) or np.all(right_shoulder == 0):
-        return None
-    if np.isnan(nose).any() or np.isnan(left_shoulder).any() or np.isnan(right_shoulder).any():
-        return None
+    # Horizontal angle (projection onto the XY plane)
+    horizontal_angle = np.arctan2(shoulder_vector[1], shoulder_vector[0])
 
-    # Compute the midpoint between shoulders
-    mid_shoulder = (left_shoulder + right_shoulder) / 2
+    # Vertical angle (projection onto the XZ plane)
+    vertical_angle = np.arctan2(
+        shoulder_vector[2],
+        np.sqrt(shoulder_vector[0]**2 + shoulder_vector[1]**2)
+    )
 
-    # Shift origin to mid_shoulder
-    nose_rel = nose - mid_shoulder
-    left_shoulder_rel = left_shoulder - mid_shoulder
-    right_shoulder_rel = right_shoulder - mid_shoulder
+    # Depth angle (projection onto the YZ plane)
+    depth_angle = np.arctan2(
+        shoulder_vector[2],
+        np.sqrt(shoulder_vector[0]**2 + shoulder_vector[1]**2 + shoulder_vector[2]**2)
+    )
 
-    # Compute shoulder width
-    shoulder_width = np.linalg.norm(left_shoulder_rel - right_shoulder_rel)
-    if shoulder_width == 0:
-        return None
+    # 3. Nose deviation from shoulder line (existing feature)
+    if shoulder_length != 0:
+        shoulder_unit_vector = shoulder_vector / shoulder_length
+    else:
+        shoulder_unit_vector = np.array([0, 0, 0])  # degenerate case
 
-    # Compute normalized nose distance from shoulder midpoint
-    nose_distance = np.linalg.norm(nose_rel) / shoulder_width
+    nose_projection = np.dot(nose - left_shoulder, shoulder_unit_vector)
+    nose_deviation = np.linalg.norm((nose - left_shoulder) - nose_projection * shoulder_unit_vector)
 
-    # Compute angle between shoulder line and vector to nose
-    shoulder_line = right_shoulder_rel - left_shoulder_rel
-    nose_vector = nose_rel
+    # 4. Z offset (if you already have it)
+    mid_shoulder = (left_shoulder + right_shoulder) / 2.0
+    z_offset = nose[2] - mid_shoulder[2]  # forward/back offset
 
-    # Compute angle using arccos of the dot product
-    dot_product = np.dot(shoulder_line, nose_vector)
-    norms_product = np.linalg.norm(shoulder_line) * np.linalg.norm(nose_vector)
-    if norms_product == 0:
-        return None
-    cos_theta = dot_product / norms_product
-    # Ensure cos_theta is in the valid range [-1, 1]
-    cos_theta = np.clip(cos_theta, -1.0, 1.0)
-    angle = np.arccos(cos_theta)  # In radians
+    # 5. Nose angle
 
-    # Feature vector
-    features = [nose_distance, angle]
-    return np.array(features)
+    # Existing distance calculation
+    nose_distance = np.linalg.norm(nose - mid_shoulder)
+
+    nose_angle = calculate_angle_nose_shoulder_yaxis(nose, left_shoulder, right_shoulder)
+
+#         # Calculate shoulder width to use as a normalizing factor
+#         shoulder_width = np.linalg.norm(left_shoulder - right_shoulder)
+
+#         # Normalized nose distance
+#         normalized_nose_distance = nose_distance / shoulder_width if shoulder_width != 0 else 0
+
+    # Combine into a bigger feature vector
+    features = np.array([
+        shoulder_length,
+        horizontal_angle,
+        vertical_angle,
+        depth_angle,
+        nose_deviation,
+        z_offset,             # existing feature for forward/back separation
+        nose_distance,  # new feature for backward/normal separation
+        nose_angle
+    ])
+
+    return features
 
 
-def process_keypoints_array(keypoints_array, label):
+def calculate_angle_nose_shoulder_yaxis(nose_vector, left_shoulder, right_shoulder):
     """
-    Process a keypoints array and append features and labels to X and y.
+    Calculate the angle between the nose position and the shoulder midpoint relative to the y-axis.
 
+    Parameters:
+        nose_vector (numpy array): A vector [x, y, z] representing the nose position.
+        left_shoulder (numpy array): A vector [x, y, z] representing the left shoulder position.
+        right_shoulder (numpy array): A vector [x, y, z] representing the right shoulder position.
+
+    Returns:
+        float: The angle in radians between the nose and the shoulder midpoint relative to the y-axis.
+    """
+    # Calculate the midpoint of the shoulders
+    shoulder_midpoint = (left_shoulder + right_shoulder) / 2.0
+
+    # Calculate the vector difference between the nose and shoulder midpoint
+    vector_diff = nose_vector - shoulder_midpoint
+
+    # Define the y-axis vector
+    y_axis_vector = np.array([0, 1, 0])
+
+    # Calculate the magnitudes of the vectors
+    mag_vector_diff = np.linalg.norm(vector_diff)
+    mag_y_axis = np.linalg.norm(y_axis_vector)
+
+    # Prevent division by zero
+    if mag_vector_diff == 0:
+        raise ValueError("Vector difference is zero, cannot compute angle.")
+
+    # Calculate the dot product
+    dot_product = np.dot(vector_diff, y_axis_vector)
+
+    # Calculate the angle (in radians)
+    angle = np.arccos(dot_product / (mag_vector_diff * mag_y_axis))
+
+    return angle
+
+def prepare_dataset(results_normal, results_backwards, results_forwards):
+    """
+    Prepare dataset from different posture types
+    Ignore samples where nose is NaN
+    
     Args:
-    - keypoints_array (numpy array): Shape (N_samples, 17, 2)
-    - label (int): Label for the class
+        results_normal (np.array): Good posture keypoints
+        results_backwards (np.array): Bad posture - backwards
+        results_forwards (np.array): Bad posture - forwards
+    
+    Returns:
+        tuple: X (features), y (labels)
     """
-    for keypoints in keypoints_array:
-        features = extract_features(keypoints)
-        if features is not None:
-            X.append(features)
-            y.append(label)
+#     extractor = PostureFeatureExtractor()
+    
+    # Filter out samples where nose is NaN
+    normal_valid_indices = ~np.isnan(results_normal[:, 0]).any(axis=1)
+    backwards_valid_indices = ~np.isnan(results_backwards[:, 0]).any(axis=1)
+    forwards_valid_indices = ~np.isnan(results_forwards[:, 0]).any(axis=1)
+    
+    # Filter datasets
+    results_normal_filtered = results_normal[normal_valid_indices]
+    results_backwards_filtered = results_backwards[backwards_valid_indices]
+    results_forwards_filtered = results_forwards[forwards_valid_indices]
+    
+    # Print filtering information
+    print(f"Normal samples: Total {len(results_normal)}, After filtering {len(results_normal_filtered)}")
+    print(f"Backwards samples: Total {len(results_backwards)}, After filtering {len(results_backwards_filtered)}")
+    print(f"Forwards samples: Total {len(results_forwards)}, After filtering {len(results_forwards_filtered)}")
+    
+    # Extract features for filtered datasets
+    X_normal = np.array([extract_features(sample) for sample in results_normal_filtered])
+    X_backwards = np.array([extract_features(sample) for sample in results_backwards_filtered])
+    X_forwards = np.array([extract_features(sample) for sample in results_forwards_filtered])
+    
+    # Create labels
+    y_normal = np.zeros(len(X_normal))  # 0 for normal posture
+    y_backwards = np.ones(len(X_backwards))  # 1 for backwards posture
+    y_forwards = np.full(len(X_forwards), 2)  # 2 for forwards posture
+    
+    # Combine datasets
+    X = np.vstack((X_normal, X_backwards, X_forwards))
+    y = np.concatenate((y_normal, y_backwards, y_forwards))
+    
+    return X, y
+
+
+
+def train_and_evaluate_model(X, y):
+    """
+    Train and evaluate classification model
+    
+    Args:
+        X (np.array): Features
+        y (np.array): Labels
+    
+    Returns:
+        tuple: Trained model, classification report
+    """
+    # Split the data
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Scale features
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
+    
+    # Train SVM Classifier
+    classifier = SVC(kernel='rbf', random_state=42)
+    classifier.fit(X_train_scaled, y_train)
+    joblib.dump(classifier, './model_checkpoint/svm_latest.joblib')
+
+    # Saving the scaler object to disk
+    with open('./model_checkpoint/scaler.pkl', 'wb') as file:
+        pickle.dump(scaler, file)
+    
+    # Predict and evaluate
+    y_pred = classifier.predict(X_test_scaled)
+    
+    # Generate classification report
+    report = classification_report(y_test, y_pred, 
+                                   target_names=['Normal', 'Backwards', 'Forwards'])
+    
+    # Generate confusion matrix
+    # cm = confusion_matrix(y_test, y_pred)
+    
+    # # Visualize confusion matrix
+    # plt.figure(figsize=(8, 6))
+    # sns.heatmap(cm, annot=True, fmt='d', 
+    #             xticklabels=['Normal', 'Backwards', 'Forwards'],
+    #             yticklabels=['Normal', 'Backwards', 'Forwards'])
+    # plt.title('Confusion Matrix')
+    # plt.xlabel('Predicted Label')
+    # plt.ylabel('True Label')
+    # plt.tight_layout()
+    # plt.show()
+    
+    return classifier, report
 
 
 def classify_posture(images):
@@ -112,11 +254,16 @@ def classify_posture(images):
     Returns:
     - prediction (int): Predicted class label or None if classification is not possible.
     """
+    with open('./model_checkpoint/scaler.pkl', 'rb') as file:
+        loaded_scaler = pickle.load(file)
+
     keypoints = np.array((postureDetect(images))[0])
     
+    # features = extract_features(keypoints)
     features = extract_features(keypoints)
+    features_scaled  = loaded_scaler.transform(features.reshape(1, -1))
     if features is not None:
-        prediction = classifier.predict([features])[0]
+        prediction = classifier.predict(features_scaled)[0]
         return prediction
     else:
         return None
@@ -125,53 +272,46 @@ def classify_posture(images):
 # testing
 if __name__ == "__main__":
     # Load keypoints data
-    results_normal = np.load('./npy_data/results_normal.npy')  # Good posture
-    results_backwards = np.load('./npy_data/results_backwards.npy')  # Bad posture - backwards
-    results_forwards = np.load('./npy_data/results_forwards.npy')  # Bad posture - forwards
-    # results_normal = results_normal[normal_i]
-    # results_backwards= results_backwards[backwards_i]
-    # results_forwards = results_forwards[forward_i]
- 
-    # Prepare data
-    X = []
-    y = []
+    results_normal = np.load('./keypoints/normal_keypoints/keypoints_img_coord.npy')
+    results_backwards = np.load('./keypoints/backward_keypoints/keypoints_img_coord.npy')
+    results_forwards = np.load('./keypoints/forward_keypoints/keypoints_img_coord.npy')
+    
+    # Prepare dataset
+    X, y = prepare_dataset(results_normal, results_backwards, results_forwards)
+    
+    # Train and evaluate
+    classifier, report = train_and_evaluate_model(X, y)
+    
+    # Print classification report
+    print(report)
+
+    joblib.dump(classifier, './model_checkpoint/svm_latest.joblib')
+
+    # Loading the scaler object from disk
 
 
-    # Process each class
-    process_keypoints_array(results_normal, label=0)  # Good posture
-    process_keypoints_array(results_backwards, label=1)  # Bad posture - backwards
-    process_keypoints_array(results_forwards, label=2)  # Bad posture - forwards
-
-    X = np.array(X)  # Shape (total_samples, 2)
-    y = np.array(y)  # Shape (total_samples,)
-
-    # Split data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-    # Initialize the classifier
-    #classifier = LogisticRegression(multi_class='multinomial', solver='lbfgs', max_iter=1000)
-    classifier = GradientBoostingClassifier(n_estimators=100, learning_rate=1.0,
-                                            max_depth=1, random_state=0).fit(X_train, y_train)
-
-    # Train the classifier
-    classifier.fit(X_train, y_train)
-
-    # Evaluate the classifier
-    y_pred = classifier.predict(X_test)
-    print(classification_report(y_test, y_pred))
-
-
-
-    # DO INFERENCE HERE
-    image_path = '../AI System Data/Normal posture/frames/frame_00008.jpg'  # Example using the first image from normal posture
+    image_path = '../AI System Data/Backwards/frames/frame_00028.jpg'  # Example using the first image from normal posture
     images = [Image.open(image_path)]
-
+    initialize_model()
     prediction = classify_posture(images)
     posture_classes = {0: 'Good Posture', 1: 'Bad Posture - Backwards', 2: 'Bad Posture - Forwards'}
     if prediction is not None:
         print(f"Predicted Posture: {posture_classes[prediction]}")
     else:
         print("Could not classify posture due to missing keypoints.")
+
+
+
+    # # DO INFERENCE HERE
+    # image_path = '../AI System Data/Normal posture/frames/frame_00008.jpg'  # Example using the first image from normal posture
+    # images = [Image.open(image_path)]
+
+    # prediction = classify_posture(images)
+    # posture_classes = {0: 'Good Posture', 1: 'Bad Posture - Backwards', 2: 'Bad Posture - Forwards'}
+    # if prediction is not None:
+    #     print(f"Predicted Posture: {posture_classes[prediction]}")
+    # else:
+    #     print("Could not classify posture due to missing keypoints.")
 
     # import matplotlib.pyplot as plt
 
